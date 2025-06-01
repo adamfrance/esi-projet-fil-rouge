@@ -1,4 +1,3 @@
-# medisecure-backend/start.sh
 #!/bin/bash
 set -e
 
@@ -36,39 +35,19 @@ if [ "$ENVIRONMENT" = "docker" ]; then
     echo "Vérification de l'existence de la base de données..."
     if ! psql -h "${DB_HOST:-db}" -U "${DB_USER:-postgres}" -lqt | cut -d \| -f 1 | grep -qw medisecure; then
         echo "Création de la base de données medisecure..."
-        psql -h "${DB_HOST:-db}" -U "${DB_USER:-postgres}" -c "CREATE DATABASE medisecure;"
+        psql -h "${DB_HOST:-db}" -U "${DB_USER:-postgres}" -c "CREATE DATABASE medisecure;" || echo "Base de données existe déjà"
     fi
     
     # Exécuter le script d'initialisation si il existe
     if [ -f "/app/init.sql" ]; then
         echo 'Initialisation de la base de données...'
-        psql -h "${DB_HOST:-db}" -U "${DB_USER:-postgres}" -d medisecure -f /app/init.sql
-        
-        if [ $? -eq 0 ]; then
-            echo "Base de données initialisée avec succès"
-        else
-            echo "Avertissement : Des erreurs sont survenues lors de l'initialisation de la base de données, mais l'exécution continue."
-        fi
+        psql -h "${DB_HOST:-db}" -U "${DB_USER:-postgres}" -d medisecure -f /app/init.sql || echo "Initialisation échouée, mais on continue"
     fi
 else
-    echo "Mode développement local détecté, pas d'attente de la base de données Docker"
+    echo "Mode développement local détecté"
 fi
 
-# Vérifier si l'utilisateur admin existe
-if [ "$ENVIRONMENT" = "docker" ]; then
-    ADMIN_EXISTS=$(psql -h "${DB_HOST:-db}" -U "${DB_USER:-postgres}" -d medisecure -c "SELECT COUNT(*) FROM users WHERE email = 'admin@medisecure.com'" -t | tr -d ' ' 2>/dev/null || echo "0")
-    
-    if [ "$ADMIN_EXISTS" = "1" ]; then
-        echo 'Utilisateur administrateur trouvé:'
-        echo 'Email: admin@medisecure.com'
-        echo 'Mot de passe: Admin123!'
-    else
-        echo 'AVERTISSEMENT: Utilisateur administrateur non trouvé!'
-        echo 'Cela peut être dû à des erreurs dans le script d'\''initialisation.'
-    fi
-fi
-
-# Définir les variables d'environnement par défaut si elles ne sont pas définies
+# Définir les variables d'environnement par défaut
 export HOST=${HOST:-0.0.0.0}
 export PORT=${PORT:-8000}
 export ENVIRONMENT=${ENVIRONMENT:-development}
@@ -77,8 +56,7 @@ echo "=== Démarrage de MediSecure API ==="
 echo "Host: $HOST"
 echo "Port: $PORT"
 echo "Environment: $ENVIRONMENT"
-echo "Database URL: ${DATABASE_URL:-Non définie}"
 
-# Démarrer l'API avec les bonnes variables d'environnement
+# Démarrer l'API
 echo 'Démarrage de l API...'
 exec uvicorn api.main:app --host "$HOST" --port "$PORT" --reload
