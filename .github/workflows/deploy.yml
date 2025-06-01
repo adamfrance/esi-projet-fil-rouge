@@ -1,11 +1,9 @@
 # .github/workflows/deploy.yml
 name: Deploy to Development Machine
-
 on:
   push:
     branches: [ main, develop ]
   workflow_dispatch:
-
 jobs:
   deploy:
     runs-on: self-hosted  # Au lieu de ubuntu-latest
@@ -14,11 +12,51 @@ jobs:
         with:
           fetch-depth: 0
           
-      - name: Deploy application
+      - name: Stop and clean existing containers
         run: |
-          # Ces commandes s'exécutent directement sur votre machine
+          # Arrêter tous les containers liés au projet
+          docker-compose down -v --remove-orphans || true
+          
+          # Supprimer les containers par nom s'ils existent encore
+          docker rm -f medisecure_backend medisecure_frontend medisecure_db || true
+          
+          # Nettoyer les réseaux orphelins
+          docker network prune -f || true
+          
+          # Supprimer les images non utilisées pour forcer la reconstruction
+          docker image prune -f || true
+          
+      - name: Pull latest changes
+        run: |
           git pull origin ${{ github.ref_name }}
-          docker-compose down -v
+          
+      - name: Build and deploy application
+        run: |
+          # Construire sans cache pour s'assurer d'avoir les dernières modifications
           docker-compose build --no-cache
+          
+          # Démarrer les services
           docker-compose up -d
+          
+          # Attendre que les services soient prêts
+          echo "Waiting for services to be ready..."
+          sleep 30
+          
+          # Vérifier que les services sont en cours d'exécution
+          docker-compose ps
+          
+      - name: Verify deployment
+        run: |
+          # Vérifier que l'API répond
+          curl -f http://localhost:8000/api/health || exit 1
           echo "Deployment completed successfully!"
+          
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Backend logs ==="
+          docker-compose logs backend
+          echo "=== Frontend logs ==="
+          docker-compose logs frontend
+          echo "=== Database logs ==="
+          docker-compose logs db
