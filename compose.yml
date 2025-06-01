@@ -2,52 +2,90 @@
 version: '3.8'
 
 services:
+  # Base de données PostgreSQL
   db:
-    image: postgres:14-alpine
+    image: postgres:13
+    container_name: medisecure_db
     environment:
+      POSTGRES_DB: medisecure
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: medisecure
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./medisecure-backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - medisecure_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
 
-  api:
-    build: ./medisecure-backend
+  # Backend FastAPI
+  backend:
+    build: 
+      context: ./medisecure-backend
+      dockerfile: Dockerfile
+    container_name: medisecure_backend
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/medisecure
-      - JWT_SECRET_KEY=your_secret_key_here
-      - JWT_ALGORITHM=HS256
-      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
-      - ENVIRONMENT=development
+      - ENVIRONMENT=docker
       - HOST=0.0.0.0
       - PORT=8000
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-this-in-production
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - SMTP_HOST=smtp.example.com
+      - SMTP_PORT=587
+      - SMTP_USER=user@example.com
+      - SMTP_PASSWORD=your_password_here
+      - EMAIL_FROM=noreply@medisecure.com
+      - FRONTEND_URL=http://localhost:3000
     ports:
       - "8000:8000"
+    volumes:
+      - ./medisecure-backend:/app
+    networks:
+      - medisecure_network
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      - ./medisecure-backend:/app
-    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
 
-  web:
-    build: ./medisecure-frontend
+  # Frontend React
+  frontend:
+    build:
+      context: ./medisecure-frontend
+      dockerfile: Dockerfile
+    container_name: medisecure_frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000/api
+      - NODE_ENV=development
     ports:
-      - "5173:5173"
+      - "3000:3000"
     volumes:
       - ./medisecure-frontend:/app
       - /app/node_modules
-    environment:
-      - VITE_API_URL=http://localhost:8000/api
+    networks:
+      - medisecure_network
     depends_on:
-      - api
+      - backend
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+
+networks:
+  medisecure_network:
+    driver: bridge
