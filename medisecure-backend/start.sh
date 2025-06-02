@@ -39,12 +39,21 @@ if [ "$ENVIRONMENT" = "docker" ]; then
     fi
     
     # Exécuter le script d'initialisation si il existe
-    if [ -f "/app/init.sql" ]; then
-        echo 'Initialisation de la base de données...'
-        psql -h "${DB_HOST:-db}" -U "${DB_USER:-postgres}" -d medisecure -f /app/init.sql || echo "Initialisation échouée, mais on continue"
-    fi
+    # if [ -f "/app/init.sql" ]; then
+    #     echo 'Initialisation de la base de données...'
+    #     psql -h "${DB_HOST:-db}" -U "${DB_USER:-postgres}" -d medisecure -f /app/init.sql || echo "Initialisation échouée, mais on continue"
+    # fi
 else
     echo "Mode développement local détecté"
+fi
+
+echo "Vérification de l'existence de l'utilisateur admin..."
+if psql -h "${DB_HOST:-db}" -U "${DB_USER:-postgres}" -d medisecure -t -c "SELECT EXISTS(SELECT 1 FROM users WHERE email='admin@medisecure.com');" | grep -q 't'; then
+    echo "Utilisateur admin trouvé dans la base de données."
+else
+    echo "ERREUR: Utilisateur admin NON TROUVÉ dans la base de données."
+    # Optionally, exit here if admin user is critical for startup
+    # exit 1
 fi
 
 # Définir les variables d'environnement par défaut
