@@ -2,7 +2,10 @@
 from dependency_injector import containers, providers
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from typing import Dict, Any  # Ajout de l'import pour Dict
+from contextlib import asynccontextmanager
+import os
+import logging
+from dotenv import load_dotenv
 
 from shared.adapters.primary.uuid_generator import UuidGenerator
 from shared.adapters.secondary.postgres_user_repository import PostgresUserRepository
@@ -17,10 +20,6 @@ from patient_management.domain.services.patient_service import PatientService
 from appointment_management.infrastructure.adapters.secondary.postgres_appointment_repository import PostgresAppointmentRepository
 from appointment_management.infrastructure.adapters.secondary.in_memory_appointment_repository import InMemoryAppointmentRepository
 from appointment_management.domain.services.appointment_service import AppointmentService
-
-import os
-import logging
-from dotenv import load_dotenv
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -38,34 +37,61 @@ class Container(containers.DeclarativeContainer):
     config = providers.Configuration()
     
     # Configuration du container
-    config.database_url.from_env("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/medisecure")
-    config.environment.from_env("ENVIRONMENT", "development")
+    database_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/medisecure")
+    environment = os.getenv("ENVIRONMENT", "development")
     
-    # Assurer que nous utilisons bien asyncpg
-    if config.database_url() and "postgresql://" in config.database_url() and "asyncpg" not in config.database_url():
-        config.database_url.override(config.database_url().replace("postgresql://", "postgresql+asyncpg://"))
+    # S'assurer que nous utilisons bien asyncpg
+    if "postgresql://" in database_url and "asyncpg" not in database_url:
+        database_url = database_url.replace("postgresql://", "postgresql+asyncpg://")
     
-    # Création du moteur - Activer echo=True pour le développement pour voir les requêtes SQL
+    # Vérifier si nous sommes en mode Docker
+    if os.getenv("ENVIRONMENT") == "docker" or os.path.exists("/.dockerenv"):
+        # En mode Docker, utiliser l'hôte 'db'
+        database_url = database_url.replace("@localhost:", "@db:")
+    
+    config.database_url = database_url
+    config.environment = environment
+    
+    logger.info(f"Database URL configurée: {database_url.split('@')[0]}:***@{database_url.split('@')[1] if '@' in database_url else 'N/A'}")
+    
+    # Création du moteur avec les bonnes options
     engine = providers.Singleton(
         create_async_engine,
-        config.database_url,
-        echo=True if config.environment() == "development" else False
+        database_url,
+        echo=True if environment == "development" else False,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,  # Vérifier la connexion avant de l'utiliser
+        pool_recycle=3600,   # Recycler les connexions toutes les heures
     )
     
-    # Création de la session SQLAlchemy
-    async_session_factory = providers.Factory(
+    # Création de la factory de session
+    async_session_factory = providers.Singleton(
         sessionmaker,
-        autocommit=False,
-        autoflush=False,
         bind=engine,
         class_=AsyncSession,
+        autocommit=False,
+        autoflush=False,
         expire_on_commit=False
     )
     
-    # Fournisseur de session
+    # Gestionnaire de contexte pour les sessions
+    @asynccontextmanager
+    async def get_session():
+        async_session = async_session_factory()
+        async with async_session() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
+    
+    # Fournisseur de session utilisant le gestionnaire de contexte
     db_session = providers.Resource(
-        lambda session_factory: session_factory(),
-        async_session_factory
+        get_session,
     )
     
     # Adaptateurs primaires
@@ -77,7 +103,7 @@ class Container(containers.DeclarativeContainer):
     appointment_service = providers.Factory(AppointmentService)
     
     # Adaptateurs secondaires - Repositories
-    # Utilisons les repositories Postgres par défaut
+    # Pour production : utiliser les repositories PostgreSQL
     user_repository = providers.Factory(
         PostgresUserRepository,
         session=db_session
@@ -94,23 +120,38 @@ class Container(containers.DeclarativeContainer):
     )
     
     # Repositories en mémoire pour les tests
-    user_repository_in_memory = providers.Factory(InMemoryUserRepository)
-    patient_repository_in_memory = providers.Factory(InMemoryPatientRepository)
-    appointment_repository_in_memory = providers.Factory(InMemoryAppointmentRepository)
+    user_repository_in_memory = providers.Singleton(InMemoryUserRepository)
+    patient_repository_in_memory = providers.Singleton(InMemoryPatientRepository)
+    appointment_repository_in_memory = providers.Singleton(InMemoryAppointmentRepository)
     
     # Services d'infrastructure
     mailer = providers.Factory(SmtpMailer)
     
-    # Log des dépendances chargées au démarrage
-    def __init__(self):
-        super().__init__()
-        env = self.config.environment()
-        db_url = self.config.database_url()
-        # Masquer le mot de passe dans les logs
-        if db_url and "@" in db_url:
-            parts = db_url.split("@")
-            masked_url = parts[0].split(":")
-            masked_url = f"{masked_url[0]}:***@{parts[1]}"
-            logger.info(f"Environnement: {env}, Base de données: {masked_url}")
-        else:
-            logger.info(f"Environnement: {env}, URL de base de données configurée")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        logger.info("Container d'injection de dépendances initialisé")
+        logger.info(f"Environnement: {self.config.environment}")
+        logger.info(f"Mode: {'Docker' if os.getenv('ENVIRONMENT') == 'docker' or os.path.exists('/.dockerenv') else 'Local'}")
+
+# Instance globale du container pour faciliter l'accès
+container_instance = None
+
+def get_container():
+    """
+    Retourne l'instance globale du container.
+    Crée une nouvelle instance si elle n'existe pas.
+    """
+    global container_instance
+    if container_instance is None:
+        container_instance = Container()
+    return container_instance
+
+# Pour les tests
+def reset_container():
+    """
+    Réinitialise le container (utile pour les tests).
+    """
+    global container_instance
+    if container_instance:
+        container_instance.shutdown_resources()
+    container_instance = None
