@@ -1,91 +1,87 @@
-# docker-compose.yml
+# medisecure-backend/docker-compose.yml
 version: '3.8'
 
 services:
-  # Base de données PostgreSQL
   db:
-    image: postgres:13
-    container_name: medisecure_db
+    image: postgres:15-alpine
+    container_name: medisecure-db
     environment:
-      POSTGRES_DB: medisecure
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: medisecure
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./medisecure-backend/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - medisecure_network
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - medisecure-network
 
-  # Backend FastAPI
-  backend:
+  api:
     build: 
-      context: ./medisecure-backend
+      context: .
       dockerfile: Dockerfile
-    container_name: medisecure_backend
+    container_name: medisecure-api
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/medisecure
       - ENVIRONMENT=docker
       - HOST=0.0.0.0
       - PORT=8000
+      - JWT_SECRET_KEY=your-super-secret-key-change-this-in-production
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=postgres
-      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-this-in-production
-      - JWT_ALGORITHM=HS256
-      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
-      - SMTP_HOST=smtp.example.com
-      - SMTP_PORT=587
-      - SMTP_USER=user@example.com
-      - SMTP_PASSWORD=your_password_here
-      - EMAIL_FROM=noreply@medisecure.com
-      - FRONTEND_URL=http://localhost:3000
+      - DB_NAME=medisecure
     ports:
-      - "8001:8000"
-    volumes:
-      - ./medisecure-backend:/app
-    networks:
-      - medisecure_network
+      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
+    volumes:
+      - ./:/app
+    command: ["/start.sh"]
+    networks:
+      - medisecure-network
 
-  # Frontend React
   frontend:
     build:
-      context: ./medisecure-frontend
+      context: ../medisecure-frontend
       dockerfile: Dockerfile
-    container_name: medisecure_frontend
+    container_name: medisecure-frontend
     environment:
-      - REACT_APP_API_URL=http://localhost:8001/api
-      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:8000/api
     ports:
-      - "3002:3000"
-    volumes:
-      - ./medisecure-frontend:/app
-      - /app/node_modules
-    networks:
-      - medisecure_network
+      - "5173:5173"
     depends_on:
-      - backend
-    restart: unless-stopped
+      - api
+    networks:
+      - medisecure-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: medisecure-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@medisecure.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+    networks:
+      - medisecure-network
 
 volumes:
   postgres_data:
 
 networks:
-  medisecure_network:
+  medisecure-network:
     driver: bridge
