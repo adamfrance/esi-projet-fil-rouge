@@ -289,19 +289,14 @@ class PostgresPatientRepository(PatientRepositoryProtocol):
             raise
     
     async def count(self) -> int:
-        """
-        Compte le nombre total de patients.
-        
-        Returns:
-            int: Le nombre total de patients
-        """
         try:
             logger.debug("Comptage du nombre total de patients")
-            query = select(func.count()).select_from(PatientModel)
-            result = await self.session.execute(query)
-            count = result.scalar_one()
-            logger.debug(f"Nombre total de patients: {count}")
-            return count
+            async with self.session_factory() as session:
+                query = select(func.count()).select_from(PatientModel)
+                result = await session.execute(query)
+                count = result.scalar_one()
+                logger.debug(f"Nombre total de patients: {count}")
+                return count
         except Exception as e:
             logger.exception(f"Erreur lors du comptage des patients: {str(e)}")
             raise

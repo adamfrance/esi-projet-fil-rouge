@@ -103,17 +103,17 @@ class Container(containers.DeclarativeContainer):
     # Pour production :
     user_repository = providers.Factory(
         PostgresUserRepository,
-        session=async_session_factory
+        session_factory=async_session_factory
     )
 
     patient_repository = providers.Factory(
         PostgresPatientRepository,
-        session=async_session_factory
+        session_factory=async_session_factory
     )
 
     appointment_repository = providers.Factory(
         PostgresAppointmentRepository,
-        session=async_session_factory
+        session_factory=async_session_factory
     )
     
     # Repositories en mémoire pour les tests
