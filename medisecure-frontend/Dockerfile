@@ -6,15 +6,17 @@ RUN apk update && apk upgrade --no-cache
 
 WORKDIR /app
 
-# Installer les dépendances
-COPY package.json .
-RUN npm i
+# Copier package.json en premier (pour le cache Docker)
+COPY package.json package-lock.json* ./
 
-# Copier le code source
-COPY . .
+# Installer les dépendances
+RUN npm ci --only=production=false
+
+# Le reste sera copié via le volume mapping
+# Pas besoin de COPY . . ici car on utilise des volumes
 
 # Exposer le port
 EXPOSE 3000
 
 # Commande de démarrage
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+CMD ["npm", "run", "dev"]
