@@ -6,14 +6,11 @@ RUN apk update && apk upgrade --no-cache
 
 WORKDIR /app
 
-# Copier package.json en premier (pour le cache Docker)
-COPY package.json package-lock.json* ./
+# Copier package.json
+COPY package.json ./
 
-# Installer les dépendances
-RUN npm ci --only=production=false
-
-# Le reste sera copié via le volume mapping
-# Pas besoin de COPY . . ici car on utilise des volumes
+# Installer les dépendances (utiliser npm install car pas de package-lock.json)
+RUN npm install
 
 # Exposer le port
 EXPOSE 3000
