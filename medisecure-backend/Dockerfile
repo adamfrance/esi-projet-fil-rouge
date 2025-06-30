@@ -22,9 +22,5 @@ COPY . .
 # Définir la variable PYTHONPATH
 ENV PYTHONPATH=/app
 
-# Définir le point d'entrée avec un script pour attendre que la base de données soit prête
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
-
 # Commande pour exécuter l'application
-CMD ["/start.sh"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
