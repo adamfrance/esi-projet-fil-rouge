@@ -50,7 +50,7 @@ services:
       - ./medisecure-frontend:/app
       - /app/node_modules
     environment:
-      - VITE_API_URL=http://medisecure-api:8000/api
+      - VITE_API_URL=http://localhost:8000/api
 
   # PgAdmin (optionnel, pour la gestion de la base de données)
   medisecure-pgadmin:
