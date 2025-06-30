@@ -20,14 +20,14 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
     Implémente le port AppointmentRepositoryProtocol.
     """
     
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session_factory):
         """
-        Initialise le repository avec une session SQLAlchemy.
+        Initialise le repository avec une factory de session SQLAlchemy.
         
         Args:
-            session: La session SQLAlchemy à utiliser
+            session_factory: La factory de session SQLAlchemy à utiliser
         """
-        self.session = session
+        self.session_factory = session_factory
     
     async def get_by_id(self, appointment_id: UUID) -> Optional[Appointment]:
         """

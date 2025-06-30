@@ -20,37 +20,30 @@ class PostgresPatientRepository(PatientRepositoryProtocol):
     Implémente le port PatientRepositoryProtocol.
     """
     
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session_factory):
         """
-        Initialise le repository avec une session SQLAlchemy.
+        Initialise le repository avec une factory de session SQLAlchemy.
         
         Args:
-            session: La session SQLAlchemy à utiliser
+            session_factory: La factory de session SQLAlchemy à utiliser
         """
-        self.session = session
+        self.session_factory = session_factory
     
     async def get_by_id(self, patient_id: UUID) -> Optional[Patient]:
-        """
-        Récupère un patient par son ID.
-        
-        Args:
-            patient_id: L'ID du patient à récupérer
-            
-        Returns:
-            Optional[Patient]: Le patient trouvé ou None si non trouvé
-        """
+        """..."""
         try:
             logger.debug(f"Récupération du patient avec ID: {patient_id}")
-            query = select(PatientModel).where(PatientModel.id == patient_id)
-            result = await self.session.execute(query)
-            patient_model = result.scalar_one_or_none()
-            
-            if not patient_model:
-                logger.debug(f"Patient avec ID {patient_id} non trouvé")
-                return None
-            
-            logger.debug(f"Patient trouvé: {patient_model.id}")
-            return self._map_to_entity(patient_model)
+            async with self.session_factory() as session:
+                query = select(PatientModel).where(PatientModel.id == patient_id)
+                result = await session.execute(query)
+                patient_model = result.scalar_one_or_none()
+                
+                if not patient_model:
+                    logger.debug(f"Patient avec ID {patient_id} non trouvé")
+                    return None
+                
+                logger.debug(f"Patient trouvé: {patient_model.id}")
+                return self._map_to_entity(patient_model)
         except Exception as e:
             logger.exception(f"Erreur lors de la récupération du patient {patient_id}: {str(e)}")
             raise
@@ -82,54 +75,46 @@ class PostgresPatientRepository(PatientRepositoryProtocol):
             raise
     
     async def create(self, patient: Patient) -> Patient:
-        """
-        Crée un nouveau patient.
-        
-        Args:
-            patient: Le patient à créer
-            
-        Returns:
-            Patient: Le patient créé avec son ID généré
-        """
+        """..."""
         try:
             logger.info(f"Création d'un nouveau patient: {patient.first_name} {patient.last_name}")
             
-            patient_model = PatientModel(
-                id=patient.id,
-                first_name=patient.first_name,
-                last_name=patient.last_name,
-                date_of_birth=patient.date_of_birth,
-                gender=patient.gender,
-                address=patient.address,
-                city=patient.city,
-                postal_code=patient.postal_code,
-                country=patient.country,
-                phone_number=patient.phone_number,
-                email=patient.email,
-                blood_type=patient.blood_type,
-                allergies=patient.allergies,
-                chronic_diseases=patient.chronic_diseases,
-                current_medications=patient.current_medications,
-                has_consent=patient.has_consent,
-                consent_date=patient.consent_date,
-                gdpr_consent=patient.gdpr_consent,
-                insurance_provider=patient.insurance_provider,
-                insurance_id=patient.insurance_id,
-                notes=patient.notes,
-                created_at=patient.created_at,
-                updated_at=patient.updated_at,
-                is_active=patient.is_active
-            )
-            
-            self.session.add(patient_model)
-            await self.session.commit()
-            await self.session.refresh(patient_model)
-            
-            logger.info(f"Patient créé avec succès: {patient_model.id}")
-            return self._map_to_entity(patient_model)
+            async with self.session_factory() as session:
+                patient_model = PatientModel(
+                    id=patient.id,
+                    first_name=patient.first_name,
+                    last_name=patient.last_name,
+                    date_of_birth=patient.date_of_birth,
+                    gender=patient.gender,
+                    address=patient.address,
+                    city=patient.city,
+                    postal_code=patient.postal_code,
+                    country=patient.country,
+                    phone_number=patient.phone_number,
+                    email=patient.email,
+                    blood_type=patient.blood_type,
+                    allergies=patient.allergies,
+                    chronic_diseases=patient.chronic_diseases,
+                    current_medications=patient.current_medications,
+                    has_consent=patient.has_consent,
+                    consent_date=patient.consent_date,
+                    gdpr_consent=patient.gdpr_consent,
+                    insurance_provider=patient.insurance_provider,
+                    insurance_id=patient.insurance_id,
+                    notes=patient.notes,
+                    created_at=patient.created_at,
+                    updated_at=patient.updated_at,
+                    is_active=patient.is_active
+                )
+                
+                session.add(patient_model)
+                await session.commit()
+                await session.refresh(patient_model)
+                
+                logger.info(f"Patient créé avec succès: {patient_model.id}")
+                return self._map_to_entity(patient_model)
         except Exception as e:
             logger.exception(f"Erreur lors de la création du patient: {str(e)}")
-            await self.session.rollback()
             raise
     
     async def update(self, patient: Patient) -> Patient:
@@ -222,24 +207,16 @@ class PostgresPatientRepository(PatientRepositoryProtocol):
             raise
     
     async def list_all(self, skip: int = 0, limit: int = 100) -> List[Patient]:
-        """
-        Liste tous les patients avec pagination.
-        
-        Args:
-            skip: Le nombre de patients à sauter
-            limit: Le nombre maximum de patients à retourner
-            
-        Returns:
-            List[Patient]: La liste des patients
-        """
+        """..."""
         try:
             logger.debug(f"Récupération de la liste des patients (skip={skip}, limit={limit})")
-            query = select(PatientModel).offset(skip).limit(limit)
-            result = await self.session.execute(query)
-            patient_models = result.scalars().all()
-            
-            logger.debug(f"Nombre de patients récupérés: {len(patient_models)}")
-            return [self._map_to_entity(patient_model) for patient_model in patient_models]
+            async with self.session_factory() as session:
+                query = select(PatientModel).offset(skip).limit(limit)
+                result = await session.execute(query)
+                patient_models = result.scalars().all()
+                
+                logger.debug(f"Nombre de patients récupérés: {len(patient_models)}")
+                return [self._map_to_entity(patient_model) for patient_model in patient_models]
         except Exception as e:
             logger.exception(f"Erreur lors de la récupération de la liste des patients: {str(e)}")
             raise
