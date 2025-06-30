@@ -49,8 +49,8 @@ class Container(containers.DeclarativeContainer):
         # En mode Docker, utiliser l'hôte 'db'
         database_url = database_url.replace("@localhost:", "@db:")
     
-    config.database_url = database_url
-    config.environment = environment
+    config.database_url.from_value(database_url)
+    config.environment.from_value(environment)
     
     logger.info(f"Database URL configurée: {database_url.split('@')[0]}:***@{database_url.split('@')[1] if '@' in database_url else 'N/A'}")
     

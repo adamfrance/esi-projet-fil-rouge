@@ -1,5 +1,5 @@
 # medisecure-backend/appointment_management/domain/services/appointment_service.py
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime, date, timedelta
 from uuid import UUID
 import logging
