@@ -88,11 +88,7 @@ class Container(containers.DeclarativeContainer):
                 raise
             finally:
                 await session.close()
-    
-    # Fournisseur de session utilisant le gestionnaire de contexte
-    db_session = providers.Resource(
-        get_session,
-    )
+
     
     # Adaptateurs primaires
     id_generator = providers.Factory(UuidGenerator)
@@ -103,20 +99,21 @@ class Container(containers.DeclarativeContainer):
     appointment_service = providers.Factory(AppointmentService)
     
     # Adaptateurs secondaires - Repositories
-    # Pour production : utiliser les repositories PostgreSQL
+
+    # Pour production :
     user_repository = providers.Factory(
         PostgresUserRepository,
-        session=db_session
+        session=async_session_factory
     )
-    
+
     patient_repository = providers.Factory(
         PostgresPatientRepository,
-        session=db_session
+        session=async_session_factory
     )
-    
+
     appointment_repository = providers.Factory(
         PostgresAppointmentRepository,
-        session=db_session
+        session=async_session_factory
     )
     
     # Repositories en mémoire pour les tests
