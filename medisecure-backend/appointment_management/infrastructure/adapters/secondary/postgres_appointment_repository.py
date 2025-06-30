@@ -30,27 +30,19 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
         self.session_factory = session_factory
     
     async def get_by_id(self, appointment_id: UUID) -> Optional[Appointment]:
-        """
-        Récupère un rendez-vous par son ID.
-        
-        Args:
-            appointment_id: L'ID du rendez-vous à récupérer
-            
-        Returns:
-            Optional[Appointment]: Le rendez-vous trouvé ou None si non trouvé
-        """
         try:
             logger.debug(f"Récupération du rendez-vous avec ID: {appointment_id}")
-            query = select(AppointmentModel).where(AppointmentModel.id == appointment_id)
-            result = await self.session.execute(query)
-            appointment_model = result.scalar_one_or_none()
-            
-            if not appointment_model:
-                logger.debug(f"Rendez-vous avec ID {appointment_id} non trouvé")
-                return None
-            
-            logger.debug(f"Rendez-vous trouvé: {appointment_model.id}")
-            return self._map_to_entity(appointment_model)
+            async with self.session_factory() as session:
+                query = select(AppointmentModel).where(AppointmentModel.id == appointment_id)
+                result = await session.execute(query)
+                appointment_model = result.scalar_one_or_none()
+                
+                if not appointment_model:
+                    logger.debug(f"Rendez-vous avec ID {appointment_id} non trouvé")
+                    return None
+                
+                logger.debug(f"Rendez-vous trouvé: {appointment_model.id}")
+                return self._map_to_entity(appointment_model)
         except Exception as e:
             logger.exception(f"Erreur lors de la récupération du rendez-vous {appointment_id}: {str(e)}")
             raise
@@ -215,16 +207,6 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             raise
     
     async def list_all(self, skip: int = 0, limit: int = 100) -> List[Appointment]:
-        """
-        Liste tous les rendez-vous avec pagination.
-        
-        Args:
-            skip: Le nombre de rendez-vous à sauter
-            limit: Le nombre maximum de rendez-vous à retourner
-            
-        Returns:
-            List[Appointment]: La liste des rendez-vous
-        """
         try:
             logger.debug(f"Liste de tous les rendez-vous (skip={skip}, limit={limit})")
             
@@ -232,8 +214,9 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             query = select(AppointmentModel).order_by(AppointmentModel.start_time.desc()).offset(skip).limit(limit)
             
             # Exécuter la requête
-            result = await self.session.execute(query)
-            appointment_models = result.scalars().all()
+            async with self.session_factory() as session:
+                result = await session.execute(query)
+                appointment_models = result.scalars().all()
             
             logger.debug(f"Nombre de rendez-vous récupérés: {len(appointment_models)}")
             return [self._map_to_entity(appointment_model) for appointment_model in appointment_models]
@@ -242,17 +225,6 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             raise
     
     async def get_by_patient(self, patient_id: UUID, skip: int = 0, limit: int = 100) -> List[Appointment]:
-        """
-        Récupère les rendez-vous d'un patient.
-        
-        Args:
-            patient_id: L'ID du patient
-            skip: Le nombre de rendez-vous à sauter
-            limit: Le nombre maximum de rendez-vous à retourner
-            
-        Returns:
-            List[Appointment]: La liste des rendez-vous du patient
-        """
         try:
             logger.debug(f"Récupération des rendez-vous du patient {patient_id}")
             
@@ -269,8 +241,9 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             )
             
             # Exécuter la requête
-            result = await self.session.execute(query)
-            appointment_models = result.scalars().all()
+            async with self.session_factory() as session:
+                result = await session.execute(query)
+                appointment_models = result.scalars().all()
             
             logger.debug(f"Nombre de rendez-vous récupérés pour le patient {patient_id}: {len(appointment_models)}")
             return [self._map_to_entity(appointment_model) for appointment_model in appointment_models]
@@ -279,17 +252,6 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             raise
     
     async def get_by_doctor(self, doctor_id: UUID, skip: int = 0, limit: int = 100) -> List[Appointment]:
-        """
-        Récupère les rendez-vous d'un médecin.
-        
-        Args:
-            doctor_id: L'ID du médecin
-            skip: Le nombre de rendez-vous à sauter
-            limit: Le nombre maximum de rendez-vous à retourner
-            
-        Returns:
-            List[Appointment]: La liste des rendez-vous du médecin
-        """
         try:
             logger.debug(f"Récupération des rendez-vous du médecin {doctor_id}")
             
@@ -306,8 +268,9 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             )
             
             # Exécuter la requête
-            result = await self.session.execute(query)
-            appointment_models = result.scalars().all()
+            async with self.session_factory() as session:
+                result = await session.execute(query)
+                appointment_models = result.scalars().all()
             
             logger.debug(f"Nombre de rendez-vous récupérés pour le médecin {doctor_id}: {len(appointment_models)}")
             return [self._map_to_entity(appointment_model) for appointment_model in appointment_models]
@@ -316,18 +279,6 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             raise
     
     async def get_by_date_range(self, start_date: date, end_date: date, skip: int = 0, limit: int = 100) -> List[Appointment]:
-        """
-        Récupère les rendez-vous dans une plage de dates.
-        
-        Args:
-            start_date: La date de début
-            end_date: La date de fin
-            skip: Le nombre de rendez-vous à sauter
-            limit: Le nombre maximum de rendez-vous à retourner
-            
-        Returns:
-            List[Appointment]: La liste des rendez-vous dans la plage de dates
-        """
         try:
             logger.debug(f"Récupération des rendez-vous entre {start_date} et {end_date}")
             
@@ -360,8 +311,9 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             )
             
             # Exécuter la requête
-            result = await self.session.execute(query)
-            appointment_models = result.scalars().all()
+            async with self.session_factory() as session:
+                result = await session.execute(query)
+                appointment_models = result.scalars().all()
             
             logger.debug(f"Nombre de rendez-vous récupérés entre {start_date} et {end_date}: {len(appointment_models)}")
             return [self._map_to_entity(appointment_model) for appointment_model in appointment_models]
@@ -370,24 +322,14 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             raise
     
     async def count(self) -> int:
-        """
-        Compte le nombre total de rendez-vous.
-        
-        Returns:
-            int: Le nombre total de rendez-vous
-        """
         try:
             logger.debug("Comptage du nombre total de rendez-vous")
-            
-            # Optimisation avec COUNT(*)
-            query = select(func.count()).select_from(AppointmentModel)
-            
-            # Exécuter la requête
-            result = await self.session.execute(query)
-            count = result.scalar_one_or_none() or 0
-            
-            logger.debug(f"Nombre total de rendez-vous: {count}")
-            return count
+            async with self.session_factory() as session:
+                query = select(func.count()).select_from(AppointmentModel)
+                result = await session.execute(query)
+                count = result.scalar_one_or_none() or 0
+                logger.debug(f"Nombre total de rendez-vous: {count}")
+                return count
         except Exception as e:
             logger.exception(f"Erreur lors du comptage des rendez-vous: {str(e)}")
             raise
