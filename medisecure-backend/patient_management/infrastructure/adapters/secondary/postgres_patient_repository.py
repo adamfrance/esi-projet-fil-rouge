@@ -49,27 +49,19 @@ class PostgresPatientRepository(PatientRepositoryProtocol):
             raise
     
     async def get_by_email(self, email: str) -> Optional[Patient]:
-        """
-        Récupère un patient par son email.
-        
-        Args:
-            email: L'email du patient à récupérer
-            
-        Returns:
-            Optional[Patient]: Le patient trouvé ou None si non trouvé
-        """
         try:
             logger.debug(f"Récupération du patient avec email: {email}")
-            query = select(PatientModel).where(PatientModel.email == email)
-            result = await self.session.execute(query)
-            patient_model = result.scalar_one_or_none()
-            
-            if not patient_model:
-                logger.debug(f"Patient avec email {email} non trouvé")
-                return None
-            
-            logger.debug(f"Patient trouvé: {patient_model.id}")
-            return self._map_to_entity(patient_model)
+            async with self.session_factory() as session:
+                query = select(PatientModel).where(PatientModel.email == email)
+                result = await session.execute(query)
+                patient_model = result.scalar_one_or_none()
+                
+                if not patient_model:
+                    logger.debug(f"Patient avec email {email} non trouvé")
+                    return None
+                
+                logger.debug(f"Patient trouvé: {patient_model.id}")
+                return self._map_to_entity(patient_model)
         except Exception as e:
             logger.exception(f"Erreur lors de la récupération du patient par email {email}: {str(e)}")
             raise
@@ -230,20 +222,6 @@ class PostgresPatientRepository(PatientRepositoryProtocol):
         skip: int = 0,
         limit: int = 100
     ) -> List[Patient]:
-        """
-        Recherche des patients selon différents critères.
-        
-        Args:
-            name: Le nom ou prénom du patient (recherche partielle)
-            date_of_birth: La date de naissance du patient
-            email: L'email du patient (recherche exacte)
-            phone: Le numéro de téléphone du patient (recherche partielle)
-            skip: Le nombre de patients à sauter
-            limit: Le nombre maximum de patients à retourner
-            
-        Returns:
-            List[Patient]: La liste des patients correspondant aux critères
-        """
         try:
             logger.debug(f"Recherche de patients avec critères: name={name}, date_of_birth={date_of_birth}, email={email}, phone={phone}")
             
@@ -254,7 +232,6 @@ class PostgresPatientRepository(PatientRepositoryProtocol):
             filters = []
             
             if name:
-                # Recherche partielle sur le prénom ou le nom
                 filters.append(
                     or_(
                         PatientModel.first_name.ilike(f"%{name}%"),
@@ -279,15 +256,16 @@ class PostgresPatientRepository(PatientRepositoryProtocol):
             query = query.offset(skip).limit(limit)
             
             # Exécuter la requête
-            result = await self.session.execute(query)
-            patient_models = result.scalars().all()
+            async with self.session_factory() as session:
+                result = await session.execute(query)
+                patient_models = result.scalars().all()
             
             logger.debug(f"Nombre de patients trouvés: {len(patient_models)}")
             return [self._map_to_entity(patient_model) for patient_model in patient_models]
         except Exception as e:
             logger.exception(f"Erreur lors de la recherche de patients: {str(e)}")
             raise
-    
+        
     async def count(self) -> int:
         try:
             logger.debug("Comptage du nombre total de patients")

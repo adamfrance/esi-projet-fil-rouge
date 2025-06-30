@@ -15,33 +15,25 @@ class PostgresUserRepository(UserRepositoryProtocol):
     Implémente le port UserRepositoryProtocol.
     """
     
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session_factory):
         """
-        Initialise le repository avec une session SQLAlchemy.
+        Initialise le repository avec une factory de session SQLAlchemy.
         
         Args:
-            session: La session SQLAlchemy à utiliser
+            session_factory: La factory de session SQLAlchemy à utiliser
         """
-        self.session = session
+        self.session_factory = session_factory
     
     async def get_by_id(self, user_id: UUID) -> Optional[User]:
-        """
-        Récupère un utilisateur par son ID.
-        
-        Args:
-            user_id: L'ID de l'utilisateur à récupérer
+        async with self.session_factory() as session:
+            query = select(UserModel).where(UserModel.id == user_id)
+            result = await session.execute(query)
+            user_model = result.scalar_one_or_none()
             
-        Returns:
-            Optional[User]: L'utilisateur trouvé ou None si non trouvé
-        """
-        query = select(UserModel).where(UserModel.id == user_id)
-        result = await self.session.execute(query)
-        user_model = result.scalar_one_or_none()
-        
-        if not user_model:
-            return None
-        
-        return self._map_to_entity(user_model)
+            if not user_model:
+                return None
+            
+            return self._map_to_entity(user_model)
     
     async def get_by_email(self, email: str) -> Optional[User]:
         """
@@ -53,14 +45,15 @@ class PostgresUserRepository(UserRepositoryProtocol):
         Returns:
             Optional[User]: L'utilisateur trouvé ou None si non trouvé
         """
-        query = select(UserModel).where(UserModel.email == email)
-        result = await self.session.execute(query)
-        user_model = result.scalar_one_or_none()
-        
-        if not user_model:
-            return None
-        
-        return self._map_to_entity(user_model)
+        async with self.session_factory() as session:
+            query = select(UserModel).where(UserModel.email == email)
+            result = await session.execute(query)
+            user_model = result.scalar_one_or_none()
+            
+            if not user_model:
+                return None
+            
+            return self._map_to_entity(user_model)
     
     async def create(self, user: User) -> User:
         """
@@ -72,22 +65,23 @@ class PostgresUserRepository(UserRepositoryProtocol):
         Returns:
             User: L'utilisateur créé avec son ID généré
         """
-        user_model = UserModel(
-            id=user.id,
-            email=user.email,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            role=user.role,
-            is_active=user.is_active,
-            created_at=user.created_at,
-            updated_at=user.updated_at
-        )
-        
-        self.session.add(user_model)
-        await self.session.commit()
-        await self.session.refresh(user_model)
-        
-        return self._map_to_entity(user_model)
+        async with self.session_factory() as session:
+            user_model = UserModel(
+                id=user.id,
+                email=user.email,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                role=user.role,
+                is_active=user.is_active,
+                created_at=user.created_at,
+                updated_at=user.updated_at
+            )
+            
+            session.add(user_model)
+            await session.commit()
+            await session.refresh(user_model)
+            
+            return self._map_to_entity(user_model)
     
     async def update(self, user: User) -> User:
         """

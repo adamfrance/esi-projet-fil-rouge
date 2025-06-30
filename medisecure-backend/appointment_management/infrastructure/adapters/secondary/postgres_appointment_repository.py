@@ -48,15 +48,6 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             raise
     
     async def create(self, appointment: Appointment) -> Appointment:
-        """
-        Crée un nouveau rendez-vous.
-        
-        Args:
-            appointment: Le rendez-vous à créer
-            
-        Returns:
-            Appointment: Le rendez-vous créé avec son ID généré
-        """
         try:
             logger.info(f"Création d'un nouveau rendez-vous: {appointment.id}")
             logger.debug(f"Données du rendez-vous: patient_id={appointment.patient_id}, doctor_id={appointment.doctor_id}")
@@ -66,46 +57,33 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             patient_id = appointment.patient_id if isinstance(appointment.patient_id, UUID) else UUID(str(appointment.patient_id))
             doctor_id = appointment.doctor_id if isinstance(appointment.doctor_id, UUID) else UUID(str(appointment.doctor_id))
             
-            # Créer le modèle avec les bonnes conversions de types
-            appointment_model = AppointmentModel(
-                id=appointment.id,
-                patient_id=patient_id,
-                doctor_id=doctor_id,
-                start_time=appointment.start_time,
-                end_time=appointment.end_time,
-                status=appointment.status.value,
-                reason=appointment.reason,
-                notes=appointment.notes,
-                created_at=appointment.created_at,
-                updated_at=appointment.updated_at,
-                is_active=appointment.is_active
-            )
-            
-            # Utiliser un bloc try spécifique pour l'ajout à la session et le commit
-            try:
-                self.session.add(appointment_model)
-                await self.session.flush()  # Flush pour détecter les erreurs avant le commit
-                await self.session.commit()
-                await self.session.refresh(appointment_model)
+            async with self.session_factory() as session:
+                # Créer le modèle avec les bonnes conversions de types
+                appointment_model = AppointmentModel(
+                    id=appointment.id,
+                    patient_id=patient_id,
+                    doctor_id=doctor_id,
+                    start_time=appointment.start_time,
+                    end_time=appointment.end_time,
+                    status=appointment.status.value,
+                    reason=appointment.reason,
+                    notes=appointment.notes,
+                    created_at=appointment.created_at,
+                    updated_at=appointment.updated_at,
+                    is_active=appointment.is_active
+                )
+                
+                session.add(appointment_model)
+                await session.commit()
+                await session.refresh(appointment_model)
                 
                 logger.info(f"Rendez-vous créé avec succès: {appointment_model.id}")
                 return self._map_to_entity(appointment_model)
-            except Exception as e:
-                await self.session.rollback()
-                logger.error(f"Erreur lors de la persistance du rendez-vous: {str(e)}")
-                # Essayons d'identifier plus précisément l'erreur
-                if "violates foreign key constraint" in str(e):
-                    logger.error("Violation de clé étrangère détectée")
-                    raise ValueError(f"Une référence à une entité inexistante a été trouvée: {str(e)}")
-                elif "unique constraint" in str(e):
-                    logger.error("Violation de contrainte d'unicité détectée")
-                    raise ValueError(f"Un rendez-vous similaire existe déjà: {str(e)}")
-                raise
                 
         except Exception as e:
             logger.exception(f"Erreur lors de la création du rendez-vous: {str(e)}")
             raise
-    
+        
     async def update(self, appointment: Appointment) -> Appointment:
         """
         Met à jour un rendez-vous existant.
