@@ -9,7 +9,7 @@ import logging
 
 from appointment_management.domain.entities.appointment import Appointment, AppointmentStatus
 from appointment_management.domain.ports.secondary.appointment_repository_protocol import AppointmentRepositoryProtocol
-from shared.infrastructure.database.models.appointment_model import AppointmentModel, AppointmentStatus as AppointmentStatusModel
+from shared.infrastructure.database.models.appointment_model import AppointmentModel
 
 # Configuration du logging
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
                 doctor_id=doctor_id,
                 start_time=appointment.start_time,
                 end_time=appointment.end_time,
-                status=AppointmentStatusModel(appointment.status.value),
+                status=appointment.status.value,
                 reason=appointment.reason,
                 notes=appointment.notes,
                 created_at=appointment.created_at,
@@ -335,15 +335,6 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             raise
     
     def _map_to_entity(self, appointment_model: AppointmentModel) -> Appointment:
-        """
-        Convertit un modèle SQLAlchemy en entité du domaine.
-        
-        Args:
-            appointment_model: Le modèle SQLAlchemy à convertir
-            
-        Returns:
-            Appointment: L'entité du domaine correspondante
-        """
         try:
             # S'assurer que le statut est valide
             status_value = appointment_model.status.value if hasattr(appointment_model.status, 'value') else str(appointment_model.status)
@@ -364,6 +355,5 @@ class PostgresAppointmentRepository(AppointmentRepositoryProtocol):
             )
         except Exception as e:
             logger.exception(f"Erreur lors de la conversion du modèle en entité: {str(e)}")
-            # Journaliser plus de détails sur le modèle
             logger.error(f"Détails du modèle: id={appointment_model.id}, status={getattr(appointment_model, 'status', 'N/A')}")
             raise ValueError(f"Erreur lors de la conversion du modèle de rendez-vous en entité: {str(e)}")

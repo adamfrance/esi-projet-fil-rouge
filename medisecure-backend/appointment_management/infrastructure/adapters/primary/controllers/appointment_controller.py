@@ -386,3 +386,8 @@ async def get_calendar(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred: {str(e)}"
         )
+    
+@router.get("/test")
+async def test_endpoint():
+    """Test endpoint sans authentification"""
+    return {"message": "Test réussi", "timestamp": datetime.now().isoformat()}
