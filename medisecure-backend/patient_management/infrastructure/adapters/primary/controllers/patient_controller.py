@@ -166,7 +166,13 @@ async def get_patient(
     """
     try:
         # Récupérer l'ID de l'utilisateur à partir du token
-        user_id = UUID(token_payload.get("sub"))
+        user_id_str = token_payload.get("sub")
+        if not user_id_str:
+            raise HTTPException(status_code=401, detail="Token invalide - ID utilisateur manquant")
+        try:
+            user_id = UUID(user_id_str)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=401, detail="Token invalide - ID utilisateur mal formé")
         
         # Créer le cas d'utilisation avec les dépendances nécessaires
         use_case = GetPatientUseCase(
